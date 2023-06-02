@@ -71,7 +71,6 @@ func main() {
 	if *fBucket == "" {
 		flag.Usage()
 		os.Exit(1)
-		// log.Fatal("bucket missing")
 	}
 	if *fBatchSize > math.MaxInt {
 		log.Fatal("illegal batch size")
@@ -114,13 +113,13 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to list objects: %v", err)
 		}
-		for _, v := range page.Versions {
-			if prefix != "" && !strings.HasPrefix(*v.Key, prefix) {
-				log.Fatalf("encountered object without requested prefix: %s", *v.Key)
+		deleteVersion := func(key, versionId string) {
+			if prefix != "" && !strings.HasPrefix(key, prefix) {
+				log.Fatalf("encountered object without requested prefix: %s", key)
 			}
 			batch = append(batch, objectVersion{
-				Key:       *v.Key,
-				VersionId: *v.VersionId,
+				Key:       key,
+				VersionId: versionId,
 			})
 			numObjects++
 			if len(batch) == batchSize {
@@ -128,6 +127,12 @@ func main() {
 				go deleteObjectVersions(results, s3Client, *fBucket, batch)
 				batch = make([]objectVersion, 0, batchSize)
 			}
+		}
+		for _, v := range page.Versions {
+			deleteVersion(*v.Key, *v.VersionId)
+		}
+		for _, v := range page.DeleteMarkers {
+			deleteVersion(*v.Key, *v.VersionId)
 		}
 	}
 	if len(batch) > 0 {
